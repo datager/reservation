@@ -31,6 +31,13 @@ enum ReservationStatus {
     BLOCKED = 3;  // 已拒绝
 }
 
+enum ReservationUpdateType {
+    UNKNOWN = 0;
+    PENDING = 1;
+    CONFIRMED = 2;
+    BLOCKED = 3;
+}
+
 message Reservation {
     string id = 1;
     string user_id = 2;
@@ -95,12 +102,79 @@ message QueryRequest {
     google.protobuf.Timestamp end = 4;
 }
 
+message ListenRequest {}
+
 service ReservationService {
-    rpc reserve(ReserveRequest) returns (ReserveResponse);
+    rpc reserve(ReserveRequest) returns (ReserveResponse); // 订阅(insert)
     rpc confirm(ConfirmRequest) returns (ConfirmResponse);
-    rpc update(UpdateRequest) returns (Reservation);
+    rpc update(UpdateRequest) returns (Reservation); // 设置 notes
     rpc cancel(CancelRequest) returns (CancelResponse);
     rpc get(getRequest) returns (getResponse);
     rpc query(Reservation) returns (stream Reservation);
+    // another system could monitor newly added/confirmed/canceled reservations
+    rpc listen(ListenRequest) returns (stream Reservation);
 }
+```
+
+### Database schema
+
+We use postgres as the database. Below is the schema:
+
+```sql
+CREATE SCHEMA rsvp;
+CREATE TYPE rsvp.reservation_status AS ENUM ('unknown', 'pending', 'confirmed', 'blocked');
+CREATE TYPE rsvp.reservation_update_type AS ENUM ('unknown', 'create', 'update', 'delete');
+CREATE TABLE rsvp.reservations (
+    id UUID NOT NULL DEFAULT uuid_generate_v4(),
+    user_id TEXT NOT NULL,
+    status reservation_status NOT NULL DEFAULT 'pending', -- 自定义类型
+    resource_id TEXT NOT NULL, -- 外部系统传入, 无需 uuid, 无需 FOREIGN KEY CONSTRAINT
+    timespan TSTZRANGE NOT NULL, -- 用区间描述
+    note TEXT,
+    CONSTRAINT reservations_pkey PRIMARY KEY(id),
+    CONSTRAINT reservations_conflict EXCLUDE USING GIST (resource_id WITH =, timespan WITH &&) -- EXCLUDE CONSTRAINT, 不能存在 resource_id 相同, 且 timespan 区间有交集的两行
+);
+CREATE INDEX reservations_resource_id_idx ON rsvp.reservations (resource_id);
+CREATE INDEX reservations_user_id_idx ON rsvp.reservations (user_id);
+
+-- if user_id is null, find all reservations within during for the resource
+-- if resource_id is null, find all reservations within during for the user
+-- if both are null, find all reservations within during
+-- if both set, find all reservations within during for the resource and user
+-- 这个函数，开发者可以决定放在应用程序层，或放在数据库层，都可以的，主要是看数据库是否容易实现，不必想太多
+CREATE OR REPLACE FUNCTION rsvp.query(uid TEXT, rid TEXT, ts: TSTZRANGE) RETURNS TABLE rsvp.reservations AS $$ $$ LANGUAGE plpgsql;
+
+-- 上文 proto 协议里定义的六个接口，目前只有 query() 需要实现一个 plpgsql，其他并没有必要单独实现 plpgsql
+
+
+-- reservation change queue
+CHANGE TABLE rsvp.reservation_changes (
+    id SERIAL NOT NULL,
+    reservation_id UUID NOT NULL,
+    op rsvp.reservation_update_type NOT NULL,
+);
+
+
+-- trigger for add/update/delete a reservation
+CREATE OR REPLACE FUNCTION rsvp.reservation_trigger() RETURNS TRIGGER AS $$
+BEGIN
+IF TG_OP = 'INSERT' THEN
+    -- updete reservation_changes
+    insert into rsvp.reservation_changes (reservation_id, op) VALUES (NEW.id, 'create');
+ELSIF TG_OP = 'UPDATE' THEN
+    -- if status changed, update reservation_changes
+    IF NEW.status != OLD.status THEN
+        insert into rsvp.reservation_changes (reservation_id, op) VALUES (NEW.id, 'update');
+    END IF;
+ELSIF TG_OP = 'DELETE' THEN
+    -- update reservation_changes
+    insert into rsvp.reservation_changes (reservation_id, op) VALUES (OLD.id, 'delete');
+END IF;
+-- notify a channel called reservation_update
+NOTIFY reservation_update;
+RETURN NULL; -- 因为是 AFTER 才触发的 trigger，所以 RETURN NULL 即可
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER reservation_trigger AFTER INSERT OR UPDATE OR DELETE ON rsvp.reservations FOR EACH ROW EXECUTE PROCEDURE rsvp.reservation_trigger();
 ```
