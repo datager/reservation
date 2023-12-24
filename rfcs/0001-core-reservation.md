@@ -144,7 +144,7 @@ CREATE INDEX reservations_user_id_idx ON rsvp.reservations (user_id);
 -- 这个函数，开发者可以决定放在应用程序层，或放在数据库层，都可以的，主要是看数据库是否容易实现，不必想太多
 CREATE OR REPLACE FUNCTION rsvp.query(uid TEXT, rid TEXT, ts: TSTZRANGE) RETURNS TABLE rsvp.reservations AS $$ $$ LANGUAGE plpgsql;
 
--- 上文 proto 协议里定义的六个接口，目前只有 query() 需要实现一个 plpgsql，其他并没有必要单独实现 plpgsql
+-- 上文 proto 协议里定义的七个接口，目前只有 query() 需要实现一个 plpgsql，其他并没有必要单独实现 plpgsql
 
 
 -- reservation change queue
@@ -178,3 +178,40 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER reservation_trigger AFTER INSERT OR UPDATE OR DELETE ON rsvp.reservations FOR EACH ROW EXECUTE PROCEDURE rsvp.reservation_trigger();
 ```
+
+Here we use EXCLUDE constraint provided by postgres to ensure that on overlapping reservations cannot be made for a given resource at a given time.
+
+```sql
+CONSTRAINT reservations_conflict EXCLUDE USING GIST (resource_id WITH =, timespan WITH &&)
+```
+
+![overlapping](images/overlapping.jpg)
+
+We also use a trigger to notify a channel when a reservation id added/updated/deleted. To make sure even we missed certain messages form the channel when DB connection is down for some reason, we use a queue to store reservation changes. Thus when we receive a notification, we can query the queue to get all the changes since last time we checked, and once we finished processing all the changes, we can delete them from the queue.
+
+### Core flow
+
+![arch 2](images/arch2.jpg)
+
+## Reference-level explanation
+
+TBD
+
+## Drawbacks
+
+N/A
+
+## Rationale and alternatives
+
+N/A
+
+## Prior art
+
+N/A
+
+## Unresolved questions
+
+- how to handle repeated reseravtion? - is this more or less a business logic which shouldn't be put into this layer? (non-goal: we consider this is a business logic and should be handled by the caller)
+- if load is big, we may use and external queue for recorging changes.
+- we haven't considered tracking/observability/deployment yet.
+- queue performance might be an issue - need to revisit the index and also consider using cache.
