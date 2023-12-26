@@ -1,3 +1,4 @@
+use std::fs;
 use std::process::Command;
 
 fn main() {
@@ -6,7 +7,7 @@ fn main() {
         .compile(&["protos/reservation.proto"], &["protos"])
         .unwrap();
 
-    // fs::remove_file("src/pb/google.protobuf.rs").unwrap();
+    let _ = fs::remove_file("src/pb/google.protobuf.rs");
 
     Command::new("cargo").args(&["fmt"]).output().unwrap();
 
