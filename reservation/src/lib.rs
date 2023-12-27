@@ -1,4 +1,5 @@
 mod error;
+mod manager;
 
 use async_trait::async_trait;
 pub use error::ReservationError;
@@ -6,6 +7,11 @@ pub use error::ReservationError;
 pub type ReservationId = String;
 pub type UserId = String;
 pub type ResourceId = String;
+
+#[derive(Debug)]
+pub struct ReservationManager {
+    pool: sqlx::PgPool,
+}
 
 #[async_trait]
 pub trait Rsvp {

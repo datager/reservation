@@ -3,6 +3,7 @@
     "./abi/Cargo.toml",
     "./abi/Cargo.toml",
     "./abi/Cargo.toml",
-    "./abi/Cargo.toml"
+    "./abi/Cargo.toml",
+    "./reservation/Cargo.toml"
   ]
 }
