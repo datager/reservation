@@ -95,10 +95,10 @@ pub struct GetResponse {
     #[prost(message, optional, tag = "1")]
     pub reservation: ::core::option::Option<Reservation>,
 }
-/// To query reservations, send a QueryRequest
+/// query reservations with user_id, resource_id, status, start time, end time and status
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct QueryRequest {
+pub struct ReservationQuery {
     /// resource id for the reservation query. If empty, query all resources
     #[prost(string, tag = "1")]
     pub resource_id: ::prost::alloc::string::String,
@@ -114,6 +114,13 @@ pub struct QueryRequest {
     /// end time for the reservation query, if 0, use Infinty for end time
     #[prost(message, optional, tag = "5")]
     pub end: ::core::option::Option<::prost_types::Timestamp>,
+}
+/// To query reservations, send a QueryRequest
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryRequest {
+    #[prost(message, optional, tag = "1")]
+    pub query: ::core::option::Option<ReservationQuery>,
 }
 /// Client can listen to reservation updates by sending a ListenRequest
 #[allow(clippy::derive_partial_eq_without_eq)]
