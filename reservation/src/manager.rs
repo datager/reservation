@@ -5,20 +5,19 @@ use sqlx::{postgres::types::PgRange, types::Uuid, PgPool, Row};
 
 #[async_trait]
 impl Rsvp for ReservationManager {
-    async fn reserve(
-        &self,
-        mut rsvp: abi::Reservation,
-    ) -> Result<abi::Reservation, abi::Error> {
+    async fn reserve(&self, mut rsvp: abi::Reservation) -> Result<abi::Reservation, abi::Error> {
         rsvp.validate()?;
 
-        let status = abi::ReservationStatus::try_from(rsvp.status)
+        let status = abi::ReservationStatus::from_i32(rsvp.status)
             .unwrap_or(abi::ReservationStatus::Pending);
 
-        let timespan: PgRange<DateTime<Utc>> = rsvp.get_timestamp().into();
+        let timespan: PgRange<DateTime<Utc>> = rsvp.get_timespan().into();
+
         // generate a insert sql for the reservation
         // execute the sql
         let id: Uuid = sqlx::query(
-            "INSERT INTO rsvp.reservations (user_id, resource_id, timespan, note, status) VALUES ($1, $2, $3, $4, $5::rsvp.reservation_status) RETURNING id")
+            "INSERT INTO rsvp.reservations (user_id, resource_id, timespan, note, status) VALUES ($1, $2, $3, $4, $5::rsvp.reservation_status) RETURNING id"
+        )
         .bind(rsvp.user_id.clone())
         .bind(rsvp.resource_id.clone())
         .bind(timespan)
@@ -32,26 +31,23 @@ impl Rsvp for ReservationManager {
         Ok(rsvp)
     }
 
-    async fn change_status(
-        &self,
-        _rsvp: abi::Reservation,
-    ) -> Result<abi::Reservation, abi::Error> {
+    async fn change_status(&self, _id: ReservationId) -> Result<abi::Reservation, abi::Error> {
         todo!()
     }
 
     async fn update_note(
         &self,
-        _rsvp: abi::Reservation,
+        _id: ReservationId,
         _note: String,
     ) -> Result<abi::Reservation, abi::Error> {
         todo!()
     }
 
-    async fn delete(&self, _rsvp: abi::Reservation) -> Result<abi::Reservation, abi::Error> {
+    async fn get(&self, _id: ReservationId) -> Result<abi::Reservation, abi::Error> {
         todo!()
     }
 
-    async fn get(&self, _id: ReservationId) -> Result<abi::Reservation, abi::Error> {
+    async fn delete(&self, _id: ReservationId) -> Result<(), abi::Error> {
         todo!()
     }
 
@@ -68,6 +64,7 @@ impl ReservationManager {
         Self { pool }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,20 +73,49 @@ mod tests {
     async fn reserve_should_work_for_valid_window() {
         let manager = ReservationManager::new(migrated_pool.clone());
         let rsvp = abi::Reservation::new_pending(
-            "y",
+            "tyrid",
             "ocean-view-room-713",
             "2022-12-25T15:00:00-0700".parse().unwrap(),
             "2022-12-28T12:00:00-0700".parse().unwrap(),
-            "I'll arrive at 3pm, Please help to upgrade to execuitive room if possible",
+            "I'll arrive at 3pm. Please help to upgrade to execuitive room if possible.",
         );
+
         let rsvp = manager.reserve(rsvp).await.unwrap();
-        assert!(rsvp.id != "");
+        assert!(!rsvp.id.is_empty());
     }
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
-    async fn reserve_should_reject_if_id_is_not_empty() {
-        let manager = ReservationManager::new(migrated_pool.clone());
-        let mut rsvp = abi::Reservation::default();
-        rsvp.id = "should-be-empty".to_string();
+    async fn reserve_conflict_reservation_should_reject() {
+        let manger = ReservationManager::new(migrated_pool.clone());
+        let rsvp1 = abi::Reservation::new_pending(
+            "tyrid",
+            "ocean-view-room-713",
+            "2022-12-25T15:00:00-0700".parse().unwrap(),
+            "2022-12-28T12:00:00-0700".parse().unwrap(),
+            "hello.",
+        );
+        let rsvp2 = abi::Reservation::new_pending(
+            "aliceid",
+            "ocean-view-room-713",
+            "2022-12-26T15:00:00-0700".parse().unwrap(),
+            "2022-12-30T12:00:00-0700".parse().unwrap(),
+            "hello.",
+        );
+
+        let _rsvp1 = manger.reserve(rsvp1).await.unwrap();
+        let err = manger.reserve(rsvp2).await.unwrap_err();
+        println!("{:?}", err);
+        if let abi::Error::ConflictReservation(_info) = err {
+            // assert_eq!(info, "conflict");
+            // assert_eq!(info.resource_id, "ocean-view-room-713");
+            // assert_eq!(
+            //     info.timespan.start,
+            //     "2022-12-26T15:00:00-0700".parse().unwrap()
+            // );
+            // assert_eq!(
+            //     info.timespan.end,
+            //     "2022-12-28T12:00:00-0700".parse().unwrap()
+            // );
+        }
     }
 }
