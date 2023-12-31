@@ -1,7 +1,7 @@
 use crate::{ReservationError, ReservationId, ReservationManager, Rsvp};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sqlx::{postgres::types::PgRange, Row, PgPool};
+use sqlx::{postgres::types::PgRange, Row, PgPool, types::Uuid};
 
 #[async_trait]
 impl Rsvp for ReservationManager {
@@ -13,8 +13,8 @@ impl Rsvp for ReservationManager {
             return Err(ReservationError::InvalidTime);
         }
 
-        // let status = abi::ReservationStatus::from_i32(rsvp.status)
-        //     .unwrap_or(abi::ReservationStatus::Pending);
+        let status = abi::ReservationStatus::try_from(rsvp.status)
+            .unwrap_or(abi::ReservationStatus::Pending);
 
         let start = abi::convert_to_utc_time(rsvp.start.as_ref().unwrap().clone());
         let end = abi::convert_to_utc_time(rsvp.end.as_ref().unwrap().clone());
@@ -22,17 +22,17 @@ impl Rsvp for ReservationManager {
         let timespan: PgRange<DateTime<Utc>> = (start..end).into();
         // generate a insert sql for the reservation
         // execute the sql
-        let id = sqlx::query(
-            "INSERT INTO rsvp.reservations (user_id, resource_id, timespan, note, status) VALUES ($1, $2, $3, $4, $5) RETURNING id")
+        let id: Uuid = sqlx::query(
+            "INSERT INTO rsvp.reservations (user_id, resource_id, timespan, note, status) VALUES ($1, $2, $3, $4, $5::rsvp.reservation_status) RETURNING id")
         .bind(rsvp.user_id.clone())
         .bind(rsvp.resource_id.clone())
         .bind(timespan)
         .bind(rsvp.note.clone())
-        .bind(rsvp.status)
+        .bind(status.to_string())
         .fetch_one(&self.pool)
         .await?.get(0);
 
-        rsvp.id = id;
+        rsvp.id = id.to_string();
 
         Ok(rsvp)
     }
