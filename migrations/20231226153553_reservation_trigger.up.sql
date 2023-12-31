@@ -33,4 +33,4 @@ RETURN NULL; -- 因为是 AFTER 才触发的 trigger，所以 RETURN NULL 即可
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER reservation_trigger AFTER INSERT OR UPDATE OR DELETE ON rsvp.reservations FOR EACH ROW EXECUTE PROCEDURE rsvp.reservation_trigger();
+CREATE TRIGGER reservations_trigger AFTER INSERT OR UPDATE OR DELETE ON rsvp.reservations FOR EACH ROW EXECUTE PROCEDURE rsvp.reservations_trigger();

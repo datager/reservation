@@ -23,7 +23,7 @@ impl Rsvp for ReservationManager {
         // generate a insert sql for the reservation
         // execute the sql
         let id = sqlx::query(
-            "INSERT INTO reservation (user_id, resource_id, timespan, note, status) VALUES ($1, $2, $3, $4, $5) RETURNING id")
+            "INSERT INTO rsvp.reservations (user_id, resource_id, timespan, note, status) VALUES ($1, $2, $3, $4, $5) RETURNING id")
         .bind(rsvp.user_id.clone())
         .bind(rsvp.resource_id.clone())
         .bind(timespan)
@@ -81,11 +81,17 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn a() {
+        let start: DateTime<FixedOffset> = "2022-12-25T15:00:00-0700".parse().unwrap();
+        println!("{:?}", start);
+    }
+    
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
     async fn reserve_should_work_for_valid_window() {
         let manager = ReservationManager::new(migrated_pool.clone());
-        let start: DateTime<FixedOffset> = "2022-12-25T15:00:00Z-0700".parse().unwrap();
-        let end: DateTime<FixedOffset> = "2022-12-28T12:00:00Z-0700".parse().unwrap();
+        let start: DateTime<FixedOffset> = "2022-12-25T15:00:00-0700".parse().unwrap();
+        let end: DateTime<FixedOffset> = "2022-12-28T12:00:00-0700".parse().unwrap();
         let rsvp = abi::Reservation{
             id: "".to_string(),
             user_id: "tyr".to_string(),
