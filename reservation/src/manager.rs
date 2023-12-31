@@ -1,7 +1,7 @@
 use crate::{ReservationError, ReservationId, ReservationManager, Rsvp};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sqlx::{postgres::types::PgRange, Row};
+use sqlx::{postgres::types::PgRange, Row, PgPool};
 
 #[async_trait]
 impl Rsvp for ReservationManager {
@@ -67,3 +67,36 @@ impl Rsvp for ReservationManager {
         todo!()
     }
 }
+
+
+impl ReservationManager {
+    pub fn new(pool: PgPool) -> Self {
+        Self{pool}
+    }
+}
+#[cfg(test)]
+mod tests {
+    use abi::convert_to_timestamp;
+    use chrono::FixedOffset;
+
+    use super::*;
+
+    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    async fn reserve_should_work_for_valid_window() {
+        let manager = ReservationManager::new(migrated_pool.clone());
+        let start: DateTime<FixedOffset> = "2022-12-25T15:00:00Z-0700".parse().unwrap();
+        let end: DateTime<FixedOffset> = "2022-12-28T12:00:00Z-0700".parse().unwrap();
+        let rsvp = abi::Reservation{
+            id: "".to_string(),
+            user_id: "tyr".to_string(),
+            resource_id: "ocean-view-room-713".to_string(),
+            start: Some(convert_to_timestamp(start.with_timezone(&Utc))),
+            end: Some(convert_to_timestamp(end.with_timezone(&Utc))),
+            note: "I'll arrive at 3pm, Please help to upgrade to execuitive room if possible".to_string(),
+            status: abi::ReservationStatus::Pending as i32,
+        };
+        let rsvp = manager.reserve(rsvp).await.unwrap();
+        assert!(rsvp.id != "");
+    }
+}
+

@@ -1,4 +1,4 @@
 -- Add down migration script here
-DROP TABLE rsvp.reservations CASCADE;
-DROP TYPE rsvp.reservation_update_type;
--- DROP TYPE rsvp.reservation_status;
+DROP TABLE IF EXISTS rsvp.reservations CASCADE;
+DROP TYPE IF EXISTS rsvp.reservation_update_type CASCADE;
+DROP TYPE IF EXISTS rsvp.reservation_status CASCADE;
