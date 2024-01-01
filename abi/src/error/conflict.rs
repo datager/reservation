@@ -100,7 +100,7 @@ impl FromStr for ParsedInfo {
 
 fn parse_datetime(s: &str) -> Result<DateTime<Utc>, ()> {
     Ok(DateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%#z")
-        .map_err(|e| {})?
+        .map_err(|_| {})?
         .with_timezone(&Utc))
 }
 
