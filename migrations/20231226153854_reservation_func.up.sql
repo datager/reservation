@@ -3,21 +3,36 @@
 -- if both are null, find all reservations within during
 -- if both set, find all reservations within during for the resource and user
 -- 这个函数，开发者可以决定放在应用程序层，或放在数据库层，都可以的，主要是看数据库是否容易实现，不必想太多
-CREATE OR REPLACE FUNCTION rsvp.query(uid TEXT, rid TEXT, during TSTZRANGE) RETURNS TABLE (LIKE rsvp.reservations)
+CREATE OR REPLACE FUNCTION rsvp.query(
+    uid TEXT, 
+    rid TEXT, 
+    during TSTZRANGE, 
+    page INTEGER DEFAULT 1,
+    page_size INTEGER DEFAULT 10,
+    is_desc bool DEFAULT FALSE
+) RETURNS TABLE (LIKE rsvp.reservations)
 AS $$
+DECLARE
+    _sql TEXT;
 BEGIN
-    -- if both are null, find all reservations within during
-    IF uid IS NULL AND rid IS NULL THEN
-        RETURN QUERY SELECT * FROM rsvp.reservations WHERE during @> timespan;
-    -- if user_id is null, find all reservations within during for the resource
-    ELSIF uid IS NULL THEN
-        RETURN QUERY SELECT * FROM rsvp.reservations WHERE resource_id = rid AND during @> timespan;
-    ELSIF rid IS NULL THEN
-    -- if resource_id is null, find all reservations within during for the user
-        RETURN QUERY SELECT * FROM rsvp.reservations WHERE user_id = uid AND during @> timespan;
-    ELSE
-    -- if both set, find all reservations within during for the resource and user
-        RETURN QUERY SELECT * FROM rsvp.reservations WHERE user_id = uid AND resource_id = rid AND during @> timespan;
-    END IF;
+    -- format the query based on parameters
+    _sql := format(
+        'SELECT * FROM rsvp.reservations WHERE during @> timespan AND $1 ORDER BY LOWER(timespan) %s LIMIT %s OFFSET %s', 
+        CASE
+            WHEN uid IS NULL AND rid IS NULL THEN 'TRUE'
+            WHEN uid IS NULL THEN 'resource_id = ' || quote_literal(rid)
+            WHEN rid IS NULL THEN 'user_id = ' || quote_literal(uid)
+            ELSE 'user_id = ' || quote_literal(uid) || ' AND resource_id = ' || quote_literal(rid)
+        END,
+        CASE 
+            WHEN is_desc THEN 'DESC'
+            ELSE 'ASC'
+        END,
+        page_size,
+        (page - 1) * page_size
+    );
+
+    -- execute the query
+    RETURN QUERY EXECUTE _sql;
 END;
 $$ LANGUAGE plpgsql;
