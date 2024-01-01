@@ -71,7 +71,7 @@ impl ReservationManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use abi::ReservationConflictInfo;
+    use abi::{Reservation, ReservationConflictInfo, ReservationConflict, ReservationWindow};
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
     async fn reserve_should_work_for_valid_window() {
@@ -108,18 +108,21 @@ mod tests {
 
         let _rsvp1 = manger.reserve(rsvp1).await.unwrap();
         let err = manger.reserve(rsvp2).await.unwrap_err();
-        // println!("{:?}", err);
-        if let abi::Error::ConflictReservation(ReservationConflictInfo::Parsed(info)) = err {
-            assert_eq!(info.old.rid, "ocean-view-room-713");
-            // println!("old start {:?}", info.old.start.to_rfc3339());
-            // println!("old end {:?}", info.old.end.to_rfc3339());
-            assert_eq!(info.old.start.to_rfc3339(), "2022-12-25T22:00:00+00:00");
-            assert_eq!(info.old.end.to_rfc3339(), "2022-12-28T19:00:00+00:00");
 
-            assert_eq!(info.new.rid, "ocean-view-room-713");
-            assert_eq!(info.new.start.to_rfc3339(), "2022-12-26T22:00:00+00:00");
-            assert_eq!(info.new.end.to_rfc3339(), "2022-12-30T19:00:00+00:00");
-        }
+        let info = ReservationConflictInfo::Parsed(ReservationConflict {
+            new: ReservationWindow {
+                rid: "ocean-view-room-713".to_string(),
+                start: "2022-12-26T15:00:00-0700".parse().unwrap(),
+                end: "2022-12-30T12:00:00-0700".parse().unwrap(),
+            },
+            old: ReservationWindow {
+                rid: "ocean-view-room-713".to_string(),
+                start: "2022-12-25T15:00:00-0700".parse().unwrap(),
+                end: "2022-12-28T12:00:00-0700".parse().unwrap(),
+            },
+        });
+
+        assert_eq!(err, abi::Error::ConflictReservation(info));
     }
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
@@ -136,5 +139,27 @@ mod tests {
         assert_eq!(rsvp.status, abi::ReservationStatus::Pending as i32);
         let rsvp = manager.change_status(rsvp.id).await.unwrap();
         assert_eq!(rsvp.status, abi::ReservationStatus::Confirmed as i32);
+    }
+
+    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    async fn reserve_change_status_not_pending_should_donothing() {
+        let manager = ReservationManager::new(migrated_pool.clone());
+        let rsvp = abi::Reservation::new_pending(
+            "aliceid",
+            "ixia-test-1",
+            "2023-01-01T15:00:00-0700".parse().unwrap(),
+            "2023-01-02T12:00:00-0700".parse().unwrap(),
+            "I need to book this for xyz project for a month.",
+        );
+        let rsvp = manager.reserve(rsvp).await.unwrap();
+        // assert_eq!(rsvp.status, abi::ReservationStatus::Pending as i32);
+
+        let rsvp = manager.change_status(rsvp.id).await.unwrap();
+        // assert_eq!(rsvp.status, abi::ReservationStatus::Pending as i32);
+
+        // change status again should not change anything
+        let ret = manager.change_status(rsvp.id).await.unwrap_err();
+        assert_eq!(ret, abi::Error::NotFound);
+        // assert_eq!(rsvp.status, abi::ReservationStatus::Pending as i32);
     }
 }
