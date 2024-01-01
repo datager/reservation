@@ -1,4 +1,5 @@
 use crate::{ReservationId, ReservationManager, Rsvp};
+use abi::Validator;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::{postgres::types::PgRange, types::Uuid, PgPool, Row};
@@ -11,7 +12,7 @@ impl Rsvp for ReservationManager {
         let status = abi::ReservationStatus::from_i32(rsvp.status)
             .unwrap_or(abi::ReservationStatus::Pending);
 
-        let timespan: PgRange<DateTime<Utc>> = rsvp.get_timespan().into();
+        let timespan: PgRange<DateTime<Utc>> = rsvp.get_timespan();
 
         // generate a insert sql for the reservation
         // execute the sql
@@ -74,15 +75,36 @@ impl Rsvp for ReservationManager {
 
     async fn query(
         &self,
-        _query: abi::ReservationQuery,
+        query: abi::ReservationQuery,
     ) -> Result<Vec<abi::Reservation>, abi::Error> {
-        todo!()
+        let user_id = str_to_option(&query.user_id);
+        let resource_id = str_to_option(&query.resource_id);
+        let range: PgRange<DateTime<Utc>> = query.get_timespan();
+        let rsvps = sqlx::query_as("SELECT * FROM rsvp.query($1, $2, $3, $4, $5, $6);")
+            .bind(user_id)
+            .bind(resource_id)
+            .bind(range)
+            .bind(query.page)
+            .bind(query.desc)
+            .bind(query.page_size)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rsvps)
     }
 }
 
 impl ReservationManager {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+}
+
+fn str_to_option(s: &str) -> Option<&str> {
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
     }
 }
 
