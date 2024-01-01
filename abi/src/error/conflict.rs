@@ -59,7 +59,8 @@ impl TryFrom<HashMap<String, String>> for ReservationWindow {
     fn try_from(value: HashMap<String, String>) -> Result<Self, Self::Error> {
         let timespan_str = value.get("timespan").ok_or(())?.replace('"', ""); // 移除"引号
         let mut split = timespan_str.splitn(2, ',');
-        let start = split.next().ok_or(())?.trim().parse().map_err(|_| ())?;
+        let x = split.next();
+        let start = x.ok_or(())?.trim().parse().map_err(|_| ())?;
         let end = split.next().ok_or(())?.trim().parse().map_err(|_| ())?;
         Ok(Self {
             rid: value.get("resource_id").ok_or(())?.to_string(),
@@ -97,10 +98,20 @@ impl FromStr for ParsedInfo {
     }
 }
 
+fn parse_datetime(s: &str) -> Result<DateTime<Utc>, ()> {
+    Ok(DateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%#z")
+        .map_err(|e| {
+            println!("error: {}", e);
+            ()
+        })?
+        .with_timezone(&Utc))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     const ERR_MSG: &str = "Key (resource_id, timespan)=(ocean-view-room-713, [\"2022-12-26 22:00:00+00\",\"2022-12-30 19:00:00+00\")) conflicts with existing key (resource_id, timespan)=(ocean-view-room-713, [\"2022-12-25 22:00:00+00\",\"2022-12-28 19:00:00+00\")).";
+
     #[test]
     fn parsed_info_should_work() {
         let info: ParsedInfo = ERR_MSG.parse().unwrap();
@@ -108,6 +119,32 @@ mod tests {
             info.new["timespan"],
             "\"2022-12-26 22:00:00+00\",\"2022-12-30 19:00:00+00\""
         )
+    }
+
+    #[test]
+    fn parse_datetime_should_work() {
+        let dt = parse_datetime("2022-12-26 22:00:00+00").unwrap();
+        assert_eq!(dt.to_rfc3339(), "2022-12-26T22:00:00+00:00");
+    }
+
+    #[test]
+    fn hash_map_to_reservation_window_should_work() {
+        let mut map = HashMap::new();
+        map.insert("resource_id".to_string(), "ocean-view-room-713".to_string());
+        map.insert(
+            "timespan".to_string(),
+            "\"2022-12-26 22:00:00+00\",\"2022-12-30 19:00:00+00\"".to_string(),
+        );
+        let window: ReservationWindow = map.try_into().unwrap();
+        assert_eq!(window.rid, "ocean-view-room-713");
+        assert_eq!(window.start.to_rfc3339(), "2022-12-26 22:00:00+00");
+        assert_eq!(window.end.to_rfc3339(), "2022-12-30 19:00:00+00");
+    }
+
+    #[test]
+    fn reservation_conflict_should_work() {
+        let info: ReservationConflict = ERR_MSG.parse().unwrap();
+        assert_eq!(info.new.rid, "ocean-view-room-713");
     }
 
     #[test]

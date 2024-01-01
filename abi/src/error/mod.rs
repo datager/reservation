@@ -19,7 +19,7 @@ pub enum Error {
     InvalidTime,
 
     #[error("confilict reservation")]
-    ConflictReservation(ReservationConflictInfo),
+ConflictReservation(ReservationConflictInfo),
 
     #[error("Invalid user id: {0}")]
     InvalidUserId(String),
