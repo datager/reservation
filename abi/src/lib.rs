@@ -7,3 +7,13 @@ pub use error::{Error, ReservationConflictInfo};
 pub use pb::*;
 
 pub use utils::*;
+
+/// database equivalent of the "reservation_status" enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[sqlx(type_name = "reservation_status", rename_all = "lowercase")]
+pub enum RsvpStatus {
+    Unknown,
+    Pending,
+    Confirmed,
+    Blocked,
+}

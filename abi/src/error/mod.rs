@@ -15,6 +15,7 @@ pub enum Error {
     // InvalidHeader { expected: String, found: String },
     #[error("Database error")]
     DbError(sqlx::Error),
+
     #[error("Invalid start or end time for the reservation")]
     InvalidTime,
 
@@ -23,6 +24,9 @@ pub enum Error {
 
     #[error("Invalid user id: {0}")]
     InvalidUserId(String),
+
+    #[error("Invalid Reservation id: {0}")]
+    InvalidReservationId(String),
 
     #[error("Invalid resource id: {0}")]
     InvalidResourceId(String),
