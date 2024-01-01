@@ -80,15 +80,20 @@ impl Rsvp for ReservationManager {
         let user_id = str_to_option(&query.user_id);
         let resource_id = str_to_option(&query.resource_id);
         let range: PgRange<DateTime<Utc>> = query.get_timespan();
-        let rsvps = sqlx::query_as("SELECT * FROM rsvp.query($1, $2, $3, $4, $5, $6);")
-            .bind(user_id)
-            .bind(resource_id)
-            .bind(range)
-            .bind(query.page)
-            .bind(query.desc)
-            .bind(query.page_size)
-            .fetch_all(&self.pool)
-            .await?;
+        let status = abi::ReservationStatus::from_i32(query.status)
+            .unwrap_or(abi::ReservationStatus::Pending);
+        let rsvps = sqlx::query_as(
+            "SELECT * FROM rsvp.query($1, $2, $3, $4::rsvp.reservation_status, $5, $6, $7);",
+        )
+        .bind(user_id)
+        .bind(resource_id)
+        .bind(range)
+        .bind(status.to_string())
+        .bind(query.page)
+        .bind(query.desc)
+        .bind(query.page_size)
+        .fetch_all(&self.pool)
+        .await?;
 
         Ok(rsvps)
     }
@@ -111,7 +116,10 @@ fn str_to_option(s: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use abi::{Reservation, ReservationConflict, ReservationConflictInfo, ReservationWindow};
+    use abi::{
+        Reservation, ReservationConflict, ReservationConflictInfo, ReservationQuery,
+        ReservationStatus, ReservationWindow,
+    };
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
     async fn reserve_should_work_for_valid_window() {
@@ -192,6 +200,24 @@ mod tests {
         manager.delete(rsvp.id.clone()).await.unwrap();
         let rsvp1 = manager.get(rsvp.id.clone()).await.unwrap_err();
         assert_eq!(rsvp1, abi::Error::NotFound);
+    }
+
+    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    async fn query_reservations_should_work() {
+        let (rsvp, manager) = make_alice_reservation(migrated_pool.clone()).await;
+        let query = ReservationQuery::new(
+            "aliceid",
+            "",
+            "2022-11-01T15:00:00-0700".parse().unwrap(),
+            "2023-12-30T12:00:00-0700".parse().unwrap(),
+            ReservationStatus::Pending,
+            1,
+            false,
+            10,
+        );
+        let rsvps = manager.query(query).await.unwrap();
+        assert_eq!(rsvps.len(), 1);
+        assert_eq!(rsvps[0], rsvp);
     }
 
     async fn make_tyr_reservation(pool: PgPool) -> (Reservation, ReservationManager) {

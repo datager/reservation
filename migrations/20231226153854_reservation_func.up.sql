@@ -8,7 +8,7 @@
 -- select * from rsvp.query('y', NULL, '("2022-01-01", "2023-01-01")', 1, false, 2);
 -- select * from rsvp.query('y', NULL, '("2022-01-01", "2023-01-01")', 2, false, 2);
 -- select * from rsvp.query('y', NULL, '("2022-01-01", "2023-01-01")', 3, false, 2);
--- explain select * from rsvp.query('y', NULL, '("2022-01-01", "2023-01-01")', 1, false, 2);
+-- explain select * from rsvp.query('y', NULL, '("2022-01-01", "2023-01-01")', 'pending', 1, false, 2);
 -- insert into rsvp.reservations (user_id, resource_id, timespan) values ('y', 'room-422', '("2022-11-16", "2022-11-17")');
 -- insert into rsvp.reservations (user_id, resource_id, timespan) values ('y', 'room-422', '("2022-11-17", "2022-11-18")');
 -- insert into rsvp.reservations (user_id, resource_id, timespan) values ('y', 'room-421', '("2022-11-17", "2022-11-18")');
@@ -20,6 +20,7 @@ CREATE OR REPLACE FUNCTION rsvp.query(
     uid TEXT, 
     rid TEXT, 
     during TSTZRANGE, 
+    status rsvp.reservation_status,
     page INTEGER DEFAULT 1,
     is_desc bool DEFAULT FALSE,
     page_size INTEGER DEFAULT 10
@@ -30,8 +31,9 @@ DECLARE
 BEGIN
     -- format the query based on parameters
     _sql := format(
-        'SELECT * FROM rsvp.reservations WHERE %L @> timespan AND %s ORDER BY LOWER(timespan) %s LIMIT %L::INTEGER OFFSET %L::INTEGER', 
+        'SELECT * FROM rsvp.reservations WHERE %L @> timespan AND status = %L AND %s ORDER BY LOWER(timespan) %s LIMIT %L::INTEGER OFFSET %L::INTEGER', 
         during,
+        status,
         CASE
             WHEN uid IS NULL AND rid IS NULL THEN 'TRUE'
             WHEN uid IS NULL THEN 'resource_id = ' || quote_literal(rid)
