@@ -40,18 +40,36 @@ impl Rsvp for ReservationManager {
 
     async fn update_note(
         &self,
-        _id: ReservationId,
-        _note: String,
+        id: ReservationId,
+        note: String,
     ) -> Result<abi::Reservation, abi::Error> {
-        todo!()
+        let id = Uuid::parse_str(&id).map_err(|_| abi::Error::InvalidReservationId(id.clone()))?;
+        let rsvp =
+            sqlx::query_as("UPDATE rsvp.reservations SET note = $1 WHERE id = $2 RETURNING *")
+                .bind(note)
+                .bind(id)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(rsvp)
     }
 
-    async fn get(&self, _id: ReservationId) -> Result<abi::Reservation, abi::Error> {
-        todo!()
+    async fn get(&self, id: ReservationId) -> Result<abi::Reservation, abi::Error> {
+        let id = Uuid::parse_str(&id).map_err(|_| abi::Error::InvalidReservationId(id.clone()))?;
+        let rsvp = sqlx::query_as("SELECT * FROM rsvp.reservations WHERE id = $1")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(rsvp)
     }
 
-    async fn delete(&self, _id: ReservationId) -> Result<(), abi::Error> {
-        todo!()
+    async fn delete(&self, id: ReservationId) -> Result<(), abi::Error> {
+        // delete reservtion by id
+        let id = Uuid::parse_str(&id).map_err(|_| abi::Error::InvalidReservationId(id.clone()))?;
+        sqlx::query("DELETE FROM rsvp.reservations WHERE id = $1")
+            .bind(&id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     async fn query(
@@ -71,7 +89,7 @@ impl ReservationManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use abi::{Reservation, ReservationConflictInfo, ReservationConflict, ReservationWindow};
+    use abi::{Reservation, ReservationConflict, ReservationConflictInfo, ReservationWindow};
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
     async fn reserve_should_work_for_valid_window() {
@@ -161,5 +179,10 @@ mod tests {
         let ret = manager.change_status(rsvp.id).await.unwrap_err();
         assert_eq!(ret, abi::Error::NotFound);
         // assert_eq!(rsvp.status, abi::ReservationStatus::Pending as i32);
+    }
+
+    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    async fn update_note_should_work() {
+        
     }
 }
