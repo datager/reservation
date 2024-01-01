@@ -1,6 +1,6 @@
 use std::{collections::HashMap, convert::Infallible, str::FromStr};
 
-use chrono::{format::parse, DateTime, Utc};
+use chrono::{DateTime, Utc};
 use regex::Regex;
 
 #[derive(Debug, Clone)]
@@ -11,15 +11,15 @@ pub enum ReservationConflictInfo {
 
 #[derive(Debug, Clone)]
 pub struct ReservationConflict {
-    a: ReservationWindow,
-    b: ReservationWindow,
+    pub new: ReservationWindow,
+    pub old: ReservationWindow,
 }
 
 #[derive(Debug, Clone)]
 pub struct ReservationWindow {
-    rid: String,
-    start: DateTime<Utc>,
-    end: DateTime<Utc>,
+    pub rid: String,
+    pub start: DateTime<Utc>,
+    pub end: DateTime<Utc>,
 }
 
 impl FromStr for ReservationConflictInfo {
@@ -38,7 +38,7 @@ impl FromStr for ReservationConflict {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        todo!()
+        ParsedInfo::from_str(s)?.try_into()
     }
 }
 
@@ -47,8 +47,8 @@ impl TryFrom<ParsedInfo> for ReservationConflict {
 
     fn try_from(value: ParsedInfo) -> Result<Self, Self::Error> {
         Ok(Self {
-            a: value.a.try_into()?,
-            b: value.b.try_into()?,
+            new: value.new.try_into()?,
+            old: value.old.try_into()?,
         })
     }
 }
@@ -68,14 +68,14 @@ impl TryFrom<HashMap<String, String>> for ReservationWindow {
     }
 }
 struct ParsedInfo {
-    a: HashMap<String, String>,
-    b: HashMap<String, String>,
+    new: HashMap<String, String>,
+    old: HashMap<String, String>,
 }
 
 impl FromStr for ParsedInfo {
     type Err = ();
 
-    // "Key (resource_id, timespan)=(ocean-view-room-713, [\"2022-12-26 22:00:00+00\",\"2022-12-30 19:00:00+00\")) conflicts with existing key (resource_id, timespan)=(ocean-view-room-713, [\"2022-12-25 22:00:00+00\",\"2022-12-28 19:00:00+00\"))."
+    // Key (resource_id, timespan)=(ocean-view-room-713, ["2022-12-26 22:00:00+00","2022-12-30 19:00:00+00")) conflicts with existing key (resource_id, timespan)=(ocean-view-room-713, ["2022-12-25 22:00:00+00","2022-12-28 19:00:00+00")).
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // use regular expression to parse the string
         let re = Regex::new(r"\((?P<k1>[a-zA-Z0-9_-]+)\s*,\s*(?P<k2>[a-zA-Z0-9_-]+)\)=\((?P<v1>[a-zA-Z0-9-_]+)\s*,\s*\[(?P<v2>)[^\)\]]+\)").unwrap();
@@ -90,8 +90,8 @@ impl FromStr for ParsedInfo {
             return Err(());
         }
         Ok(ParsedInfo {
-            a: maps[0].take().unwrap(),
-            b: maps[1].take().unwrap(),
+            new: maps[0].take().unwrap(),
+            old: maps[1].take().unwrap(),
         })
     }
 }
