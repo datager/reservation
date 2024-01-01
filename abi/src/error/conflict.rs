@@ -38,7 +38,8 @@ impl FromStr for ReservationConflict {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ParsedInfo::from_str(s)?.try_into()
+        let x = ParsedInfo::from_str(s)?.try_into();
+        x
     }
 }
 
@@ -152,11 +153,11 @@ mod tests {
         match info {
             ReservationConflictInfo::Parsed(conflict) => {
                 assert_eq!(conflict.new.rid, "ocean-view-room-713");
-                assert_eq!(conflict.new.start.to_rfc3339(), "2022-12-26 22:00:00+00");
-                assert_eq!(conflict.new.end.to_rfc3339(), "2022-12-30 19:00:00+00");
+                assert_eq!(conflict.new.start.to_rfc3339(), "2022-12-26T22:00:00+00:00");
+                assert_eq!(conflict.new.end.to_rfc3339(), "2022-12-30T19:00:00+00:00");
                 assert_eq!(conflict.old.rid, "ocean-view-room-713".to_string());
-                assert_eq!(conflict.old.start.to_rfc3339(), "2022-12-25 22:00:00+00");
-                assert_eq!(conflict.old.end.to_rfc3339(), "2022-12-28 19:00:00+00");
+                assert_eq!(conflict.old.start.to_rfc3339(), "2022-12-25T22:00:00+00:00");
+                assert_eq!(conflict.old.end.to_rfc3339(), "2022-12-28T19:00:00+00:00");
             }
             _ => panic!("should be parsed"),
         }
