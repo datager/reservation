@@ -57,11 +57,10 @@ impl TryFrom<HashMap<String, String>> for ReservationWindow {
     type Error = ();
 
     fn try_from(value: HashMap<String, String>) -> Result<Self, Self::Error> {
-        let timespan_str = value.get("timespan").ok_or(())?.replace('"', ""); // 移除"引号
+        let timespan_str = value.get("timespan").ok_or(())?.replace('"', "");
         let mut split = timespan_str.splitn(2, ',');
-        let x = split.next();
-        let start = x.ok_or(())?.trim().parse().map_err(|_| ())?;
-        let end = split.next().ok_or(())?.trim().parse().map_err(|_| ())?;
+        let start = parse_datetime(split.next().ok_or(())?)?;
+        let end = parse_datetime(split.next().ok_or(())?)?;
         Ok(Self {
             rid: value.get("resource_id").ok_or(())?.to_string(),
             start,
@@ -137,8 +136,8 @@ mod tests {
         );
         let window: ReservationWindow = map.try_into().unwrap();
         assert_eq!(window.rid, "ocean-view-room-713");
-        assert_eq!(window.start.to_rfc3339(), "2022-12-26 22:00:00+00");
-        assert_eq!(window.end.to_rfc3339(), "2022-12-30 19:00:00+00");
+        assert_eq!(window.start.to_rfc3339(), "2022-12-26T22:00:00+00:00");
+        assert_eq!(window.end.to_rfc3339(), "2022-12-30T19:00:00+00:00");
     }
 
     #[test]
