@@ -16,22 +16,35 @@
 -- insert into rsvp.reservations (user_id, resource_id, timespan) values ('y', 'room-421', '("2023-1-17", "2023-1-18")');
 -- insert into rsvp.reservations (user_id, resource_id, timespan) values ('y', 'room-421', '("2022-11-01", "2022-11-5")');
 
+-- if user_id is null, find all reservations within during for the resource
+-- if resource_id is null, find all reservations within during for the user
+-- if both are null, find all reservations within during
+-- if both set, find all reservations within during for the resource and user
 CREATE OR REPLACE FUNCTION rsvp.query(
-    uid TEXT, 
-    rid TEXT, 
-    during TSTZRANGE, 
+    uid text,
+    rid text,
+    during TSTZRANGE,
     status rsvp.reservation_status,
-    page INTEGER DEFAULT 1,
+    page integer DEFAULT 1,
     is_desc bool DEFAULT FALSE,
-    page_size INTEGER DEFAULT 10
-) RETURNS TABLE (LIKE rsvp.reservations)
-AS $$
+    page_size integer DEFAULT 10
+) RETURNS TABLE (LIKE rsvp.reservations) AS $$
 DECLARE
-    _sql TEXT;
+    _sql text;
 BEGIN
+    -- if page_size is not between 10 and 100, set it to 10
+    IF page_size < 10 OR page_size > 100 THEN
+        page_size := 10;
+    END IF;
+
+    -- if page is less than 1, set it to 1
+    IF page < 1 THEN
+        page := 1;
+    END IF;
+
     -- format the query based on parameters
     _sql := format(
-        'SELECT * FROM rsvp.reservations WHERE %L @> timespan AND status = %L AND %s ORDER BY LOWER(timespan) %s LIMIT %L::INTEGER OFFSET %L::INTEGER', 
+        'SELECT * FROM rsvp.reservations WHERE %L @> timespan AND status = %L AND %s ORDER BY lower(timespan) %s LIMIT %L::integer OFFSET %L::integer',
         during,
         status,
         CASE
@@ -40,7 +53,7 @@ BEGIN
             WHEN rid IS NULL THEN 'user_id = ' || quote_literal(uid)
             ELSE 'user_id = ' || quote_literal(uid) || ' AND resource_id = ' || quote_literal(rid)
         END,
-        CASE 
+        CASE
             WHEN is_desc THEN 'DESC'
             ELSE 'ASC'
         END,

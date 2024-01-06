@@ -67,7 +67,7 @@ impl Rsvp for ReservationManager {
         // delete reservtion by id
         let id = Uuid::parse_str(&id).map_err(|_| abi::Error::InvalidReservationId(id.clone()))?;
         sqlx::query("DELETE FROM rsvp.reservations WHERE id = $1")
-            .bind(&id)
+            .bind(id)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -83,7 +83,7 @@ impl Rsvp for ReservationManager {
         let status = abi::ReservationStatus::from_i32(query.status)
             .unwrap_or(abi::ReservationStatus::Pending);
         let rsvps = sqlx::query_as(
-            "SELECT * FROM rsvp.query($1, $2, $3, $4::rsvp.reservation_status, $5, $6, $7);",
+            "SELECT * FROM rsvp.query($1, $2, $3, $4::rsvp.reservation_status, $5, $6, $7)",
         )
         .bind(user_id)
         .bind(resource_id)
@@ -115,11 +115,13 @@ fn str_to_option(s: &str) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use abi::{
-        Reservation, ReservationConflict, ReservationConflictInfo, ReservationQuery,
-        ReservationStatus, ReservationWindow,
+        Reservation, ReservationConflict, ReservationConflictInfo, ReservationQueryBuilder,
+        ReservationWindow,
     };
+    use prost_types::Timestamp;
+
+    use super::*;
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
     async fn reserve_should_work_for_valid_window() {
@@ -205,20 +207,71 @@ mod tests {
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
     async fn query_reservations_should_work() {
         let (rsvp, manager) = make_alice_reservation(migrated_pool.clone()).await;
-        let query = ReservationQuery::new(
-            "aliceid",
-            "",
-            "2022-11-01T15:00:00-0700".parse().unwrap(),
-            "2023-12-30T12:00:00-0700".parse().unwrap(),
-            ReservationStatus::Pending,
-            1,
-            false,
-            10,
-        );
+        let query = ReservationQueryBuilder::default()
+            .user_id("aliceid")
+            .start("2021-11-01T15:00:00-0700".parse::<Timestamp>().unwrap())
+            .end("2023-12-31T12:00:00-0700".parse::<Timestamp>().unwrap())
+            .status(abi::ReservationStatus::Pending as i32)
+            .build()
+            .unwrap();
+
+        let rsvps = manager.query(query).await.unwrap();
+        assert_eq!(rsvps.len(), 1);
+        assert_eq!(rsvps[0], rsvp);
+
+        // if window is not in range, should return empty
+        let query = ReservationQueryBuilder::default()
+            .user_id("aliceid")
+            .start("2023-01-01T15:00:00-0700".parse::<Timestamp>().unwrap())
+            .end("2023-02-01T12:00:00-0700".parse::<Timestamp>().unwrap())
+            .status(abi::ReservationStatus::Confirmed as i32)
+            .build()
+            .unwrap();
+        let rsvps = manager.query(query).await.unwrap();
+        assert_eq!(rsvps.len(), 0);
+
+        // if status is not in correct, should return empty
+        let query = ReservationQueryBuilder::default()
+            .user_id("aliceid")
+            .start("2021-11-01T15:00:00-0700".parse::<Timestamp>().unwrap())
+            .end("2023-12-31T12:00:00-0700".parse::<Timestamp>().unwrap())
+            .status(abi::ReservationStatus::Confirmed as i32)
+            .build()
+            .unwrap();
+        let rsvps = manager.query(query.clone()).await.unwrap();
+        assert_eq!(rsvps.len(), 0);
+
+        // change state to confirmed, query should get result
+        let rsvp = manager.change_status(rsvp.id).await.unwrap();
         let rsvps = manager.query(query).await.unwrap();
         assert_eq!(rsvps.len(), 1);
         assert_eq!(rsvps[0], rsvp);
     }
+
+    // #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    // async fn query_reservations_should_work() {
+    //     let (rsvp, manager) = make_alice_reservation(migrated_pool.clone()).await;
+    //     // let query = ReservationQuery::new(
+    //     //     "aliceid",
+    //     //     "",
+    //     //     "2022-11-01T15:00:00-0700".parse().unwrap(),
+    //     //     "2023-12-30T12:00:00-0700".parse().unwrap(),
+    //     //     ReservationStatus::Pending,
+    //     //     1,
+    //     //     false,
+    //     //     10,
+    //     // );
+
+    //     let query = ReservationQueryBuilder::default()
+    //         .user_id("aliceid")
+    //         .start("2022-11-01T15:00:00-0700".parse::<Timestamp>().unwrap())
+    //         .end("2022-11-01T12:00:00-0700".parse::<Timestamp>().unwrap())
+    //         .build()
+    //         .unwrap();
+    //     let rsvps = manager.query(query).await.unwrap();
+    //     assert_eq!(rsvps.len(), 1);
+    //     assert_eq!(rsvps[0], rsvp);
+    // }
 
     async fn make_tyr_reservation(pool: PgPool) -> (Reservation, ReservationManager) {
         make_reservation(
