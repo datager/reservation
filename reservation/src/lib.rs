@@ -30,4 +30,8 @@ pub trait Rsvp {
         &self,
         query: abi::ReservationQuery,
     ) -> Result<Vec<abi::Reservation>, abi::Error>;
+    async fn filter(
+        &self,
+        filter: abi::ReservationFilter,
+    ) -> Result<Vec<abi::Reservation>, abi::Error>;
 }

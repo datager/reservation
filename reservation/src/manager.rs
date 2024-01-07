@@ -97,6 +97,27 @@ impl Rsvp for ReservationManager {
 
         Ok(rsvps)
     }
+
+    async fn filter(
+        &self,
+        filter: abi::ReservationFilter,
+    ) -> Result<Vec<abi::Reservation>, abi::Error> {
+        // filter reservations by user_id, resource_id, status, and order by id
+        let user_id = str_to_option(&filter.user_id);
+        let resource_id = str_to_option(&filter.resource_id);
+        let status = abi::ReservationStatus::from_i32(filter.status)
+            .unwrap_or(abi::ReservationStatus::Pending);
+        let rsvps = sqlx::query_as("SELECT * FROM rsvp.filter($1, $2, $3::rsvp.reservation_status, $4, $5, $6) ORDER BY id")
+            .bind(user_id)
+            .bind(resource_id)
+            .bind(status.to_string())
+            .bind(filter.cursor)
+            .bind(filter.desc)
+            .bind(filter.page_size)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rsvps)
+    }
 }
 
 impl ReservationManager {
@@ -192,15 +213,15 @@ mod tests {
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
     async fn get_reservation_should_work() {
         let (rsvp, manager) = make_alice_reservation(migrated_pool.clone()).await;
-        let rsvp1 = manager.get(rsvp.id.clone()).await.unwrap();
+        let rsvp1 = manager.get(rsvp.id).await.unwrap();
         assert_eq!(rsvp, rsvp1);
     }
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
     async fn delete_reservation_should_work() {
         let (rsvp, manager) = make_alice_reservation(migrated_pool.clone()).await;
-        manager.delete(rsvp.id.clone()).await.unwrap();
-        let rsvp1 = manager.get(rsvp.id.clone()).await.unwrap_err();
+        manager.delete(rsvp.id).await.unwrap();
+        let rsvp1 = manager.get(rsvp.id).await.unwrap_err();
         assert_eq!(rsvp1, abi::Error::NotFound);
     }
 
@@ -248,31 +269,20 @@ mod tests {
         assert_eq!(rsvps[0], rsvp);
     }
 
-    // #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
-    // async fn query_reservations_should_work() {
-    //     let (rsvp, manager) = make_alice_reservation(migrated_pool.clone()).await;
-    //     // let query = ReservationQuery::new(
-    //     //     "aliceid",
-    //     //     "",
-    //     //     "2022-11-01T15:00:00-0700".parse().unwrap(),
-    //     //     "2023-12-30T12:00:00-0700".parse().unwrap(),
-    //     //     ReservationStatus::Pending,
-    //     //     1,
-    //     //     false,
-    //     //     10,
-    //     // );
+    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    async fn filter_reservations_should_work() {
+        let (rsvp, manager) = make_alice_reservation(migrated_pool.clone()).await;
+        let filter = abi::ReservationFilterBuilder::default()
+            .user_id("aliceid")
+            .status(abi::ReservationStatus::Pending as i32)
+            .build()
+            .unwrap();
+        let rsvps = manager.filter(filter).await.unwrap();
+        assert_eq!(rsvps.len(), 1);
+        assert_eq!(rsvps[0], rsvp);
+    }
 
-    //     let query = ReservationQueryBuilder::default()
-    //         .user_id("aliceid")
-    //         .start("2022-11-01T15:00:00-0700".parse::<Timestamp>().unwrap())
-    //         .end("2022-11-01T12:00:00-0700".parse::<Timestamp>().unwrap())
-    //         .build()
-    //         .unwrap();
-    //     let rsvps = manager.query(query).await.unwrap();
-    //     assert_eq!(rsvps.len(), 1);
-    //     assert_eq!(rsvps[0], rsvp);
-    // }
-
+    // private non test functions
     async fn make_tyr_reservation(pool: PgPool) -> (Reservation, ReservationManager) {
         make_reservation(
             pool,
