@@ -1,0 +1,10 @@
+---
+db:
+  host: localhost
+  port: 5432
+  user: y
+  password: postgres
+  dbname: reservation
+server:
+  host: localhost
+  port: 8080

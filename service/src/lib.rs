@@ -1,4 +1,5 @@
-use std::pin::Pin;
+mod config;
+use std::{ops::Deref, pin::Pin};
 
 use abi::{
     reservation_service_server::ReservationService, CancelRequest, CancelResponse, ConfirmRequest,
@@ -6,9 +7,24 @@ use abi::{
     QueryRequest, Reservation, ReserveRequest, ReserveResponse, UpdateRequest, UpdateResponse,
 };
 use futures::Stream;
+use reservation::ReservationManager;
 use tonic::{async_trait, Request, Response, Status};
-pub struct RsvpService;
+pub struct RsvpService(ReservationManager);
 type ReservationStream = Pin<Box<dyn Stream<Item = Result<Reservation, Status>> + Send>>;
+
+impl Deref for RsvpService {
+    type Target = ReservationManager;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl RsvpService {
+    pub fn new() -> Self {
+        // Self(ReservationManager::new())
+        todo!()
+    }
+}
 
 #[async_trait]
 impl ReservationService for RsvpService {
