@@ -450,8 +450,7 @@ pub mod reservation_service_client {
         pub async fn filter(
             &mut self,
             request: impl tonic::IntoRequest<super::FilterRequest>,
-        ) -> Result<tonic::Response<tonic::codec::Streaming<super::FilterResponse>>, tonic::Status>
-        {
+        ) -> Result<tonic::Response<super::FilterResponse>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
                     tonic::Code::Unknown,
@@ -461,9 +460,7 @@ pub mod reservation_service_client {
             let codec = tonic::codec::ProstCodec::default();
             let path =
                 http::uri::PathAndQuery::from_static("/reservation.ReservationService/filter");
-            self.inner
-                .server_streaming(request.into_request(), path, codec)
-                .await
+            self.inner.unary(request.into_request(), path, codec).await
         }
         /// another system could monitor newly added/confirmed/cancelled reservations
         pub async fn listen(
@@ -527,15 +524,11 @@ pub mod reservation_service_server {
             &self,
             request: tonic::Request<super::QueryRequest>,
         ) -> Result<tonic::Response<Self::queryStream>, tonic::Status>;
-        /// Server streaming response type for the filter method.
-        type filterStream: futures_core::Stream<Item = Result<super::FilterResponse, tonic::Status>>
-            + Send
-            + 'static;
         /// filter reservations, order by reservation id
         async fn filter(
             &self,
             request: tonic::Request<super::FilterRequest>,
-        ) -> Result<tonic::Response<Self::filterStream>, tonic::Status>;
+        ) -> Result<tonic::Response<super::FilterResponse>, tonic::Status>;
         /// Server streaming response type for the listen method.
         type listenStream: futures_core::Stream<Item = Result<super::Reservation, tonic::Status>>
             + Send
@@ -793,14 +786,9 @@ pub mod reservation_service_server {
                 "/reservation.ReservationService/filter" => {
                     #[allow(non_camel_case_types)]
                     struct filterSvc<T: ReservationService>(pub Arc<T>);
-                    impl<T: ReservationService>
-                        tonic::server::ServerStreamingService<super::FilterRequest>
-                        for filterSvc<T>
-                    {
+                    impl<T: ReservationService> tonic::server::UnaryService<super::FilterRequest> for filterSvc<T> {
                         type Response = super::FilterResponse;
-                        type ResponseStream = T::filterStream;
-                        type Future =
-                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::FilterRequest>,
@@ -821,7 +809,7 @@ pub mod reservation_service_server {
                             accept_compression_encodings,
                             send_compression_encodings,
                         );
-                        let res = grpc.server_streaming(method, req).await;
+                        let res = grpc.unary(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)

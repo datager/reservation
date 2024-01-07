@@ -175,7 +175,7 @@ service ReservationService {
     // query reservations by resource id, user id, status, start time, end time
     rpc query(QueryRequest) returns (stream Reservation);
     // filter reservations, order by reservation id
-    rpc filter(FilterRequest) returns (stream FilterResponse);
+    rpc filter(FilterRequest) returns (FilterResponse);
     // another system could monitor newly added/confirmed/cancelled reservations
     rpc listen(ListenRequest) returns (stream Reservation);
 }
