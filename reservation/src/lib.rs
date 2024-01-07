@@ -1,11 +1,8 @@
 mod manager;
 
+use abi::ReservationId;
 use async_trait::async_trait;
 use sqlx::PgPool;
-
-pub type ReservationId = String;
-pub type UserId = String;
-pub type ResourceId = String;
 
 #[derive(Debug)]
 pub struct ReservationManager {

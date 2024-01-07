@@ -2,7 +2,7 @@
 CREATE TYPE rsvp.reservation_status AS ENUM ('unknown', 'pending', 'confirmed', 'blocked');
 CREATE TYPE rsvp.reservation_update_type AS ENUM ('unknown', 'create', 'update', 'delete');
 CREATE TABLE rsvp.reservations (
-    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    id BIGSERIAL NOT NULL,
     user_id TEXT NOT NULL,
     status rsvp.reservation_status NOT NULL DEFAULT 'pending', -- 自定义类型
     resource_id TEXT NOT NULL, -- 外部系统传入, 无需 uuid, 无需 FOREIGN KEY CONSTRAINT
