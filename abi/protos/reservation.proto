@@ -137,6 +137,18 @@ message FilterRequest {
     ReservationFilter filter = 1;
 }
 
+// filter pager info
+message FilterPager {
+    int64 prev = 1;
+    int64 next = 2;
+    int32 total = 3;
+}
+
+message FilterResponse {
+    repeated Reservation reservations = 1;
+    FilterPager pager = 2;
+}
+
 // Client can listen to reservation updates by sending a ListenRequest
 message ListenRequest {}
 
@@ -163,7 +175,7 @@ service ReservationService {
     // query reservations by resource id, user id, status, start time, end time
     rpc query(QueryRequest) returns (stream Reservation);
     // filter reservations, order by reservation id
-    rpc filter(FilterRequest) returns (stream Reservation);
+    rpc filter(FilterRequest) returns (stream FilterResponse);
     // another system could monitor newly added/confirmed/cancelled reservations
     rpc listen(ListenRequest) returns (stream Reservation);
 }

@@ -177,6 +177,25 @@ pub struct FilterRequest {
     #[prost(message, optional, tag = "1")]
     pub filter: ::core::option::Option<ReservationFilter>,
 }
+/// filter pager info
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FilterPager {
+    #[prost(int64, tag = "1")]
+    pub prev: i64,
+    #[prost(int64, tag = "2")]
+    pub next: i64,
+    #[prost(int32, tag = "3")]
+    pub total: i32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FilterResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub reservations: ::prost::alloc::vec::Vec<Reservation>,
+    #[prost(message, optional, tag = "2")]
+    pub pager: ::core::option::Option<FilterPager>,
+}
 /// Client can listen to reservation updates by sending a ListenRequest
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -431,7 +450,7 @@ pub mod reservation_service_client {
         pub async fn filter(
             &mut self,
             request: impl tonic::IntoRequest<super::FilterRequest>,
-        ) -> Result<tonic::Response<tonic::codec::Streaming<super::Reservation>>, tonic::Status>
+        ) -> Result<tonic::Response<tonic::codec::Streaming<super::FilterResponse>>, tonic::Status>
         {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
@@ -509,7 +528,7 @@ pub mod reservation_service_server {
             request: tonic::Request<super::QueryRequest>,
         ) -> Result<tonic::Response<Self::queryStream>, tonic::Status>;
         /// Server streaming response type for the filter method.
-        type filterStream: futures_core::Stream<Item = Result<super::Reservation, tonic::Status>>
+        type filterStream: futures_core::Stream<Item = Result<super::FilterResponse, tonic::Status>>
             + Send
             + 'static;
         /// filter reservations, order by reservation id
@@ -778,7 +797,7 @@ pub mod reservation_service_server {
                         tonic::server::ServerStreamingService<super::FilterRequest>
                         for filterSvc<T>
                     {
-                        type Response = super::Reservation;
+                        type Response = super::FilterResponse;
                         type ResponseStream = T::filterStream;
                         type Future =
                             BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;

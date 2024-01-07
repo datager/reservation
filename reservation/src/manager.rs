@@ -1,5 +1,5 @@
 use crate::{ReservationManager, Rsvp};
-use abi::{ReservationId, Validator};
+use abi::{FilterPager, ReservationId, Validator};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::{postgres::types::PgRange, PgPool, Row};
@@ -101,22 +101,60 @@ impl Rsvp for ReservationManager {
     async fn filter(
         &self,
         filter: abi::ReservationFilter,
-    ) -> Result<Vec<abi::Reservation>, abi::Error> {
+    ) -> Result<(FilterPager, Vec<abi::Reservation>), abi::Error> {
         // filter reservations by user_id, resource_id, status, and order by id
         let user_id = str_to_option(&filter.user_id);
         let resource_id = str_to_option(&filter.resource_id);
         let status = abi::ReservationStatus::from_i32(filter.status)
             .unwrap_or(abi::ReservationStatus::Pending);
-        let rsvps = sqlx::query_as("SELECT * FROM rsvp.filter($1, $2, $3::rsvp.reservation_status, $4, $5, $6) ORDER BY id")
+        let page_size = if filter.page_size < 10 || filter.page_size > 100 {
+            10
+        } else {
+            filter.page_size
+        };
+        let rsvps: Vec<abi::Reservation> = sqlx::query_as("SELECT * FROM rsvp.filter($1, $2, $3::rsvp.reservation_status, $4, $5, $6) ORDER BY id")
             .bind(user_id)
             .bind(resource_id)
             .bind(status.to_string())
             .bind(filter.cursor)
             .bind(filter.desc)
-            .bind(filter.page_size)
+            .bind(page_size)
             .fetch_all(&self.pool)
             .await?;
-        Ok(rsvps)
+
+        // if the first id is current cursor, then we have prev, we start from 1
+        // if len - start > page_size, then we have next, we end at len - 1
+        let has_prev = !rsvps.is_empty() && rsvps[0].id == filter.cursor;
+        let start = if has_prev { 1 } else { 0 };
+
+        let has_next = rsvps.len() > page_size as usize;
+        let end = if has_next {
+            rsvps.len() - 1
+        } else {
+            rsvps.len()
+        };
+
+        println!(
+            "rsvps.len(): {}, start: {}, end: {}, has_prev: {}, has_next: {}, page_size: {}",
+            rsvps.len(),
+            start,
+            end,
+            has_prev,
+            has_next,
+            page_size
+        );
+
+        let prev = if has_prev { rsvps[start - 1].id } else { -1 };
+        let next = if has_next { rsvps[end - 1].id } else { -1 };
+
+        // TODO optimize this clone
+        let result = rsvps[start..end].to_vec();
+        let pager = FilterPager {
+            next,
+            prev,
+            total: 0,
+        };
+        Ok((pager, result))
     }
 }
 
@@ -277,7 +315,9 @@ mod tests {
             .status(abi::ReservationStatus::Pending as i32)
             .build()
             .unwrap();
-        let rsvps = manager.filter(filter).await.unwrap();
+        let (pager, rsvps) = manager.filter(filter).await.unwrap();
+        assert_eq!(pager.prev, -1);
+        assert_eq!(pager.next, -1);
         assert_eq!(rsvps.len(), 1);
         assert_eq!(rsvps[0], rsvp);
     }
