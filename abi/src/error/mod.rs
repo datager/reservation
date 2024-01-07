@@ -9,6 +9,13 @@ pub use conflict::{ReservationConflict, ReservationConflictInfo, ReservationWind
 pub enum Error {
     #[error("Database error")]
     DbError(sqlx::Error),
+
+    #[error("Failed to read configuration file")]
+    ConfigReadError,
+
+    #[error("Failed to parse configuration file")]
+    ConfigParseError,
+
     #[error("Invalid start or end time for the reservation")]
     InvalidTime,
 

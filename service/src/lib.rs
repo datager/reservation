@@ -1,10 +1,10 @@
-mod config;
 use std::{ops::Deref, pin::Pin};
 
 use abi::{
-    reservation_service_server::ReservationService, CancelRequest, CancelResponse, ConfirmRequest,
-    ConfirmResponse, FilterRequest, FilterResponse, GetRequest, GetResponse, ListenRequest,
-    QueryRequest, Reservation, ReserveRequest, ReserveResponse, UpdateRequest, UpdateResponse,
+    reservation_service_server::ReservationService, CancelRequest, CancelResponse, Config,
+    ConfirmRequest, ConfirmResponse, FilterRequest, FilterResponse, GetRequest, GetResponse,
+    ListenRequest, QueryRequest, Reservation, ReserveRequest, ReserveResponse, UpdateRequest,
+    UpdateResponse,
 };
 use futures::Stream;
 use reservation::ReservationManager;
@@ -20,9 +20,8 @@ impl Deref for RsvpService {
 }
 
 impl RsvpService {
-    pub fn new() -> Self {
-        // Self(ReservationManager::new())
-        todo!()
+    pub async fn from_config(config: Config) -> Result<Self, anyhow::Error> {
+        Ok(Self(ReservationManager::from_config(&config.db).await?))
     }
 }
 
