@@ -1,14 +1,14 @@
+mod config;
 mod error;
 mod pb;
 mod types;
 mod utils;
-mod config;
 
 pub use error::{Error, ReservationConflict, ReservationConflictInfo, ReservationWindow};
 pub use pb::*;
 
-pub use utils::*;
 pub use config::*;
+pub use utils::*;
 
 pub type ReservationId = i64;
 pub type UserId = String;

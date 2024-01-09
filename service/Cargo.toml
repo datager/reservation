@@ -12,5 +12,6 @@ futures = { version = "0.3.30", default-features = false }
 reservation = { version = "0.1.0", path = "../reservation" }
 serde = { version = "1.0.195", features = ["derive"] }
 serde_yaml = "0.9.30"
+shellexpand = "3.1.0"
 tokio = { version = "1.21.2", features = ["full"] }
 tonic = { version = "0.8.2", features = ["tokio-rustls", "gzip"] }

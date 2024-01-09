@@ -1,4 +1,4 @@
-use std::{ops::Deref, pin::Pin};
+use std::pin::Pin;
 
 use abi::{
     reservation_service_server::ReservationService, CancelRequest, CancelResponse, Config,
@@ -7,21 +7,19 @@ use abi::{
     UpdateResponse,
 };
 use futures::Stream;
-use reservation::ReservationManager;
+use reservation::{ReservationManager, Rsvp};
 use tonic::{async_trait, Request, Response, Status};
-pub struct RsvpService(ReservationManager);
-type ReservationStream = Pin<Box<dyn Stream<Item = Result<Reservation, Status>> + Send>>;
-
-impl Deref for RsvpService {
-    type Target = ReservationManager;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+pub struct RsvpService {
+    manager: ReservationManager,
 }
 
+type ReservationStream = Pin<Box<dyn Stream<Item = Result<Reservation, Status>> + Send>>;
+
 impl RsvpService {
-    pub async fn from_config(config: Config) -> Result<Self, anyhow::Error> {
-        Ok(Self(ReservationManager::from_config(&config.db).await?))
+    pub async fn from_config(config: &Config) -> Result<Self, anyhow::Error> {
+        Ok(Self {
+            manager: ReservationManager::from_config(&config.db).await?,
+        })
     }
 }
 
@@ -31,31 +29,38 @@ impl ReservationService for RsvpService {
         &self,
         request: Request<ReserveRequest>,
     ) -> Result<Response<ReserveResponse>, Status> {
-        todo!()
+        let request = request.into_inner();
+        if request.reservation.is_none() {
+            return Err(Status::invalid_argument("reservation is required"));
+        }
+        let reservation = self.manager.reserve(request.reservation.unwrap()).await?;
+        Ok(Response::new(ReserveResponse {
+            reservation: Some(reservation.into()),
+        }))
     }
     /// confirm a pending reservation, if reservation is not pending, do nothing
     async fn confirm(
         &self,
-        request: Request<ConfirmRequest>,
+        _request: Request<ConfirmRequest>,
     ) -> Result<Response<ConfirmResponse>, Status> {
         todo!()
     }
     /// update the reservation note
     async fn update(
         &self,
-        request: Request<UpdateRequest>,
+        _request: Request<UpdateRequest>,
     ) -> Result<Response<UpdateResponse>, Status> {
         todo!()
     }
     /// cancel a reservation
     async fn cancel(
         &self,
-        request: Request<CancelRequest>,
+        _request: Request<CancelRequest>,
     ) -> Result<Response<CancelResponse>, Status> {
         todo!()
     }
     /// get a reservation by id
-    async fn get(&self, request: Request<GetRequest>) -> Result<Response<GetResponse>, Status> {
+    async fn get(&self, _request: Request<GetRequest>) -> Result<Response<GetResponse>, Status> {
         todo!()
     }
     /// Server streaming response type for the query method.
@@ -63,7 +68,7 @@ impl ReservationService for RsvpService {
     /// query reservations by resource id, user id, status, start time, end time
     async fn query(
         &self,
-        request: Request<QueryRequest>,
+        _request: Request<QueryRequest>,
     ) -> Result<Response<Self::queryStream>, Status> {
         todo!()
     }
@@ -71,7 +76,7 @@ impl ReservationService for RsvpService {
     /// filter reservations, order by reservation id
     async fn filter(
         &self,
-        request: Request<FilterRequest>,
+        _request: Request<FilterRequest>,
     ) -> Result<Response<FilterResponse>, tonic::Status> {
         todo!()
     }
@@ -80,7 +85,7 @@ impl ReservationService for RsvpService {
     /// another system could monitor newly added/confirmed/cancelled reservations
     async fn listen(
         &self,
-        request: Request<ListenRequest>,
+        _request: Request<ListenRequest>,
     ) -> Result<Response<Self::listenStream>, tonic::Status> {
         todo!()
     }
